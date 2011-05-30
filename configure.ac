@@ -35,7 +35,7 @@ GTK_DOC_CHECK(1.9)         # Gtk-Doc
 
 ### LIBRARIES ##################################################################
 
-GLIB_REQUIRED_VERSION=2.18
+GLIB_REQUIRED_VERSION=2.24
 GTK_REQUIRED_VERSION=2.10
 GDK_PIXBUF_REQUIRED_VERSION=2.6
 PKG_CHECK_MODULES([OSXCART], [

@@ -14,7 +14,7 @@ static void
 plist_fail_case(gconstpointer name)
 {
 	GError *error = NULL;
-	PlistObject *plist;
+	GVariant *plist;
 	gchar *filename = build_filename(name);
 	
 	plist = plist_read(filename, &error);
@@ -30,14 +30,14 @@ static void
 plist_pass_case(gconstpointer name)
 {
 	GError *error = NULL;
-	PlistObject *plist;
+	GVariant *plist;
 	gchar *filename = build_filename(name);
 	
 	plist = plist_read(filename, &error);
 	g_free(filename);
 	g_assert(error == NULL);
 	g_assert(plist != NULL);
-	plist_object_free(plist);
+	g_variant_unref(plist);
 }
 
 /* This test reads a plist and writes it to a string, and compares that string
@@ -51,7 +51,7 @@ static void
 plist_compare_case(gconstpointer name)
 {
 	GError *error = NULL;
-	PlistObject *plist;
+	GVariant *plist;
 	gchar *correctstring, *actualstring, *filename = build_filename(name);
 	
 	plist = plist_read(filename, &error);
@@ -60,7 +60,7 @@ plist_compare_case(gconstpointer name)
 	g_free(filename);
 	g_assert(error == NULL);
 	actualstring = plist_write_to_string(plist);
-	plist_object_free(plist);
+	g_variant_unref(plist);
 	g_assert_cmpstr(actualstring, ==, correctstring);
 	g_free(actualstring);
 	g_free(correctstring);
@@ -70,7 +70,7 @@ static void
 plist_lookup_test()
 {
 	GError *error = NULL;
-	PlistObject *list, *obj;
+	GVariant *list, *obj;
 	
 	list = plist_read("oneofeach.plist", &error);
 	g_assert(error == NULL);
@@ -82,17 +82,17 @@ plist_lookup_test()
 	
 	/* Look up the first element of the "Array" key */
 	obj = plist_object_lookup(list, "Array", 0, -1);
-	g_assert_cmpint(obj->integer.val, ==, 1);
+	g_assert_cmpint(g_variant_get_int32(obj), ==, 1);
 	
 	/* Look up the "String" key of the "Dict" key */
 	obj = plist_object_lookup(list, "Dict", "String", -1);
-	g_assert_cmpstr(obj->string.val, ==, "3");
+	g_assert_cmpstr(g_variant_get_string(obj, NULL), ==, "3");
 	
 	/* Look up the "True value" key */
 	obj = plist_object_lookup(list, "True value", -1);
-	g_assert(obj->boolean.val);
+	g_assert(g_variant_get_boolean(obj));
 	
-	plist_object_free(list);
+	g_variant_unref(list);
 }
 
 const gchar *failcases[] = {

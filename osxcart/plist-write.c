@@ -23,29 +23,29 @@ with Osxcart.  If not, see <http://www.gnu.org/licenses/>. */
 typedef struct {
 	GString *buffer;
 	gint num_indents;
-	GHashTable *hashtable;
+	GVariant *dict;
 } PlistDumpContext;
 
 /* Forward declarations */
-static void plist_dump(PlistObject *object, PlistDumpContext *context);
+static void plist_dump(GVariant *object, PlistDumpContext *context);
 
 /* Output a key and its corresponding object */
 static void
 dump_key_value_pair(const gchar *key, PlistDumpContext *context)
 {
-	GHashTable *hashtable = context->hashtable;
+	GVariant *dict = context->dict;
 	gchar *tabs = g_strnfill(context->num_indents, '\t');
-	PlistObject *value = g_hash_table_lookup(hashtable, key);
+	GVariant *value = g_variant_lookup_value(dict, key, NULL);
 	
 	g_string_append_printf(context->buffer, "%s<key>%s</key>\n", tabs, key);
 	g_free(tabs);
 	plist_dump(value, context);
-	context->hashtable = hashtable;
+	context->dict = dict;
 }
 
 /* Output an object; recurse if the object is a container */
 static void
-plist_dump(PlistObject *object, PlistDumpContext *context)
+plist_dump(GVariant *object, PlistDumpContext *context)
 {
 	gchar *tempstr, *tabs;
 
@@ -55,66 +55,93 @@ plist_dump(PlistObject *object, PlistDumpContext *context)
 	tabs = g_strnfill(context->num_indents, '\t');
 	g_string_append(context->buffer, tabs);
 
-	switch(object->type) {
-	case PLIST_OBJECT_BOOLEAN:
-		g_string_append(context->buffer, object->boolean.val? "<true/>\n" : "<false/>\n");
-		break;
+	if(g_variant_is_of_type(object, G_VARIANT_TYPE_BOOLEAN))
+		g_string_append(context->buffer, g_variant_get_boolean(object)? "<true/>\n" : "<false/>\n");
 	
-	case PLIST_OBJECT_REAL:
-		g_string_append_printf(context->buffer, "<real>%.14f</real>\n", object->real.val);
-		break;
+	else if(g_variant_is_of_type(object, G_VARIANT_TYPE_DOUBLE))
+		g_string_append_printf(context->buffer, "<real>%.14f</real>\n", g_variant_get_double(object));
 	
-	case PLIST_OBJECT_INTEGER:
-		g_string_append_printf(context->buffer, "<integer>%d</integer>\n", object->integer.val);
-		break;
+	else if(g_variant_is_of_type(object, G_VARIANT_TYPE_INT32))
+		g_string_append_printf(context->buffer, "<integer>%d</integer>\n", g_variant_get_int32(object));
 		
-	case PLIST_OBJECT_STRING:
-		if(object->string.val == NULL || strlen(object->string.val) == 0)
+	else if(g_variant_is_of_type(object, G_VARIANT_TYPE_STRING)) {
+		gsize length;
+		const char *string = g_variant_get_string(object, &length);
+		if(string == NULL || length == 0)
 			g_string_append(context->buffer, "<string></string>\n");
 		else {
-			tempstr = g_markup_escape_text(object->string.val, -1);
+			tempstr = g_markup_escape_text(string, length);
 			g_string_append_printf(context->buffer, "<string>%s</string>\n", tempstr);
 			g_free(tempstr);
 		}
-		break;
+	}
 		
-	case PLIST_OBJECT_DATE:
-		tempstr = g_time_val_to_iso8601(&(object->date.val));
+	else if(g_variant_is_of_type(object, G_VARIANT_TYPE("(xx)"))) {
+		GTimeVal timeval;
+		g_variant_get(object, "(xx)", &timeval.tv_sec, &timeval.tv_usec);
+		tempstr = g_time_val_to_iso8601(&timeval);
 		g_string_append_printf(context->buffer, "<date>%s</date>\n", tempstr);
 		g_free(tempstr);
-		break;
+	}
+
+	else if(g_variant_is_of_type(object, G_VARIANT_TYPE("av"))) {
+		GVariantIter *iter;
+		GVariant *value;
+		g_variant_get(object, "av", &iter);
 	
-	case PLIST_OBJECT_ARRAY:
-		if(object->array.val) {
+		if(g_variant_iter_n_children(iter) > 0) {
 			g_string_append(context->buffer, "<array>\n");
 			context->num_indents++;
-			g_list_foreach(object->array.val, (GFunc)plist_dump, context);
+			while(g_variant_iter_loop(iter, "v", &value))
+				plist_dump(value, context);
 			context->num_indents--;
 			g_string_append_printf(context->buffer, "%s</array>\n", tabs);
 		} else
 			g_string_append(context->buffer, "<array/>\n");
-		break;
+		g_variant_iter_free(iter);
+	}
 	
-	case PLIST_OBJECT_DICT:
-		if(g_hash_table_size(object->dict.val) != 0) {
-			GList *keys = g_list_sort(g_hash_table_get_keys(object->dict.val), (GCompareFunc)strcmp);
+	else if(g_variant_is_of_type(object, G_VARIANT_TYPE("a{sv}"))) {
+		GVariantIter *iter;
+		GList *keys = NULL;
+		const char *key;
+
+		/* Put all the keys into a list so we can dump them alphabetically */
+		g_variant_get(object, "a{sv}", &iter);
+		while(g_variant_iter_loop(iter, "{sv}", &key, NULL))
+			keys = g_list_prepend(keys, g_strdup(key));
+		g_variant_iter_free(iter);
+
+		if(keys != NULL) {
+			keys = g_list_sort(keys, (GCompareFunc)strcmp);
 						
 			g_string_append(context->buffer, "<dict>\n");
 			context->num_indents++;
-			context->hashtable = object->dict.val;
+			context->dict = object;
 			g_list_foreach(keys, (GFunc)dump_key_value_pair, context);
 			context->num_indents--;
-			context->hashtable = NULL;
+			context->dict = NULL;
 			g_string_append_printf(context->buffer, "%s</dict>\n", tabs);
 		} else
 			g_string_append(context->buffer, "<dict/>\n");
-		break;
+
+		g_list_foreach(keys, (GFunc)g_free, NULL);
+		g_list_free(keys);
+	}
 	
-	case PLIST_OBJECT_DATA:
-		tempstr = g_base64_encode(object->data.val, object->data.length);
+	else if(g_variant_is_of_type(object, G_VARIANT_TYPE("ay"))) {
+		gsize length = g_variant_n_children(object);
+		unsigned char *data = g_new0(unsigned char, length);
+		unsigned char *ptr = data;
+		GVariantIter *iter;
+		
+		g_variant_get(object, "ay", &iter);
+		while(g_variant_iter_loop(iter, "y", ptr++))
+			/*pass*/ ;
+		g_variant_iter_free(iter);
+		tempstr = g_base64_encode(data, length);
 		g_string_append_printf(context->buffer, "<data>%s</data>\n", tempstr);
 		g_free(tempstr);
-		break;
 	}
 	g_free(tabs);
 }
@@ -132,7 +159,7 @@ plist_dump(PlistObject *object, PlistDumpContext *context)
  * @error is set.
  */
 gboolean
-plist_write(PlistObject *plist, const gchar *filename, GError **error)
+plist_write(GVariant *plist, const gchar *filename, GError **error)
 {
 	gchar *string;
 	gboolean retval;
@@ -160,7 +187,7 @@ plist_write(PlistObject *plist, const gchar *filename, GError **error)
  * when you are done with it.
  */
 gchar *
-plist_write_to_string(PlistObject *plist)
+plist_write_to_string(GVariant *plist)
 {
 	PlistDumpContext *context;
 	GString *buffer;

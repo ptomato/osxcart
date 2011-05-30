@@ -51,80 +51,6 @@ plist_error_quark(void)
 }
 
 /**
- * plist_object_new:
- * @type: The type of #PlistObject to create.
- * 
- * Allocates a #PlistObject, with its value initialized to zero in whatever way
- * is appropriate for @type.
- *
- * Returns: a newly-allocated #PlistObject.
- */
-PlistObject *
-plist_object_new(const PlistObjectType type)
-{
-	PlistObject *retval;
-
-	osxcart_init();
-	
-	retval = g_slice_new0(PlistObject);
-	retval->type = type;
-	
-	switch(type) {
-		case PLIST_OBJECT_REAL:
-			/* Explicitly initialize PLIST_OBJECT_REAL to 0.0, since that might
-			not	be all zero bytes */
-			retval->real.val = 0.0;
-			break;
-		case PLIST_OBJECT_DICT:
-			/* New GHashTable, with strings as keys, and destroy notify 
-			functions so the keys and values get freed automatically when 
-			destroyed */
-			retval->dict.val = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, (GDestroyNotify)plist_object_free);
-			break;
-		default:
-		    ;
-	}
-	
-	return retval;
-}
-
-/**
- * plist_object_free:
- * @object: The #PlistObject to free.
- *
- * Deallocates a #PlistObject. If @object is a container type, also deallocates
- * all of the #PlistObject<!---->s inside it.
- */
-void
-plist_object_free(PlistObject *object)
-{
-	osxcart_init();
-	
-	if(object == NULL)
-		return;
-	
-	switch(object->type) {
-		case PLIST_OBJECT_STRING:
-			g_free(object->string.val);
-			break;
-		case PLIST_OBJECT_ARRAY:
-			g_list_foreach(object->array.val, (GFunc)plist_object_free, NULL);
-			g_list_free(object->array.val);
-			break;
-		case PLIST_OBJECT_DICT:
-			g_hash_table_destroy(object->dict.val);
-			break;
-		case PLIST_OBJECT_DATA:
-			g_free(object->data.val);
-			break;
-		default:
-		    ;
-	}
-	
-	g_slice_free(PlistObject, object);
-}
-
-/**
  * plist_object_lookup:
  * @tree: The root object of the plist
  * @Varargs: A path consisting of dictionary keys and array indices, terminated
@@ -158,18 +84,20 @@ plist_object_free(PlistObject *object)
  *   &lt;/dict&gt;
  * &lt;/plist&gt;]| 
  * then the following code: 
- * |[PlistObject *obj1 = plist_object_lookup(plist, "Array", 0, -1); 
- * PlistObject *obj2 = plist_object_lookup(plist, "Dict", "Integer", -1);]| 
- * will place in @obj1 and @obj2 two identical #PlistObjects containing
+ * |[GVariant *obj1 = plist_object_lookup(plist, "Array", 0, -1); 
+ * GVariant *obj2 = plist_object_lookup(plist, "Dict", "Integer", -1);]| 
+ * will place in @obj1 and @obj2 two identical #GVariant<!---->s containing
  * the integer 1, although they will both point to two different spots in the
  * @plist tree. 
  * 
- * Returns: The requested #PlistObject, or %NULL if the path did not exist. The 
+ * Returns: The requested #GVariant, or %NULL if the path did not exist. The 
  * returned object is a pointer to the object within the original @tree, and is 
- * not copied. Therefore, it should not be freed separately from @tree.
+ * not given an extra reference. Therefore, it should not be unreferenced when
+ * you are done with it; conversely, if you want to keep it around longer than
+ * the lifetime of @tree, you should reference it.
  */
-PlistObject *
-plist_object_lookup(PlistObject *tree, ...)
+GVariant *
+plist_object_lookup(GVariant *tree, ...)
 {
 	g_return_val_if_fail(tree, NULL);
 	
@@ -178,10 +106,10 @@ plist_object_lookup(PlistObject *tree, ...)
 	
 	va_start(ap, tree);
 	for(arg = va_arg(ap, gpointer); GPOINTER_TO_INT(arg) != -1; arg = va_arg(ap, gpointer)) {
-		if(tree->type == PLIST_OBJECT_DICT)
-			tree = g_hash_table_lookup(tree->dict.val, (const gchar *)arg);
-		else if(tree->type == PLIST_OBJECT_ARRAY)
-			tree = g_list_nth_data(tree->array.val, GPOINTER_TO_UINT(arg));
+		if(g_variant_is_of_type(tree, G_VARIANT_TYPE("a{sv}")))
+			tree = g_variant_lookup_value(tree, (const gchar *)arg, NULL);
+		else if(g_variant_is_of_type(tree, G_VARIANT_TYPE("av")))
+			tree = g_variant_get_child_value(tree, GPOINTER_TO_UINT(arg));
 		else {
 			g_critical("%s: %s", __func__, _("Tried to look up a child of an "
 				"object that wasn't a dict or array"));
@@ -193,6 +121,10 @@ plist_object_lookup(PlistObject *tree, ...)
 	}
 	va_end(ap);
 	
+	/* Unbox the final value if it is a basic type */
+	if(g_variant_is_of_type(tree, G_VARIANT_TYPE_VARIANT))
+		tree = g_variant_get_variant(tree);
+
 	return tree;
 }
 

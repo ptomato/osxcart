@@ -21,33 +21,40 @@ with Osxcart.  If not, see <http://www.gnu.org/licenses/>. */
 #include "init.h"
 
 /* plist-parser.c - This is a plist parser implemented in GLib's GMarkup SAX
-parser API. It requires Glib 2.18 or later. */
-
-typedef enum {
-	STATE_ROOT_OBJECT,
-	STATE_ARRAY_OBJECT,
-	STATE_DICT_OBJECT
-} ParserState;
+parser API. */
 
 typedef struct {
-	ParserState state;    /* Current state of state machine */
-	GList *array;         /* <array> to add objects, if in STATE_ARRAY_OBJECT */
-	GHashTable *dict;     /* <dict> to add objects, if in STATE_DICT_OBJECT */
-	gchar *key;	          /* key of current object, if in STATE_DICT_OBJECT */
-	PlistObject *current; /* Object currently being parsed */
+	GVariantBuilder *builder; /* Builder for adding objects, if in dict_parser
+							   or array_parser */
+	gchar *key;	              /* key of current object, if in dict_parser */
+	GVariant *retval;         /* toplevel object, set during bare_parser */
 } ParseData;
 
 /* Forward declarations */
-static void element_start(GMarkupParseContext *context, const gchar *element_name, const gchar **attribute_names, const gchar **attribute_values, gpointer user_data, GError **error);
-static void element_end(GMarkupParseContext *context, const gchar *element_name, gpointer user_data, GError **error);
-static void element_text(GMarkupParseContext *context, const gchar *text, gsize text_len, gpointer user_data, GError **error);
-static void plist_start(GMarkupParseContext *context, const gchar *element_name, const gchar **attribute_names, const gchar **attribute_values, gpointer user_data, GError **error);
-static void plist_end(GMarkupParseContext *context, const gchar *element_name, gpointer user_data, GError **error);
+typedef void ParserStartFunc(GMarkupParseContext *context, const char *element_name, const char **attribute_names, const char **attribute_values, gpointer user_data, GError **error);
+typedef void ParserEndFunc(GMarkupParseContext *context, const char *element_name, gpointer user_data, GError **error);
+typedef void ParserTextFunc(GMarkupParseContext *context, const char *text, gsize text_len, gpointer user_data, GError **error);
+
+static ParserStartFunc bare_start, dict_start, array_start, plist_start;
+static ParserEndFunc bare_end, dict_end, array_end, plist_end;
+static ParserTextFunc bare_text, dict_text, array_text;
 
 /* Callback functions to deal with the opening and closing tags and the content
-of XML elements representing PlistObjects */
-static GMarkupParser element_parser = { 
-	element_start, element_end, element_text, NULL, NULL
+of XML elements representing plist objects not inside a container */
+static GMarkupParser bare_parser = { 
+	bare_start, bare_end, bare_text, NULL, NULL
+};
+
+/* Callback functions to deal with XML elements representing plist objects
+inside a <dict> container */
+static GMarkupParser dict_parser = {
+	dict_start, dict_end, dict_text, NULL, NULL
+};
+
+/* Callback functions to deal with XML elements representing plist objects
+inside an <array> container */
+static GMarkupParser array_parser = {
+	array_start, array_end, array_text, NULL, NULL
 };
 
 /* Callback functions to deal with the <plist> root element opening and closing
@@ -56,7 +63,6 @@ static GMarkupParser plist_parser = {
 	plist_start, plist_end, NULL, NULL, NULL
 };
 
-
 /* Custom string equality function, for typing convenience */
 static inline gboolean 
 str_eq(const gchar *s1, const gchar *s2)
@@ -64,33 +70,61 @@ str_eq(const gchar *s1, const gchar *s2)
 	return (g_ascii_strcasecmp(s1, s2) == 0);
 }
 
-/* Check the root element of the plist. Make sure it is named <plist>, and that
-it is version 1.0 */
+/* Callback for processing an opening XML element. This is the outside element 
+ of the plist. It could be a regular element, or a container like array or dict.
+ By the time the element is closed, data->retval should point to a GVariant
+ containing the element. We do not know what the content of the element is, so
+ it is not created until fill_object() (for non-containers) or when the
+ GVariantBuilder is closed (for containers); the exception is <true> and
+ <false> elements, whose content is already obvious. */
 static void
-check_plist_element(const gchar *element_name, const gchar **attribute_names, const gchar **attribute_values, GError **error)
+bare_start(GMarkupParseContext *context, const char *element_name, const char **attribute_names, const char **attribute_values, gpointer user_data, GError **error)
 {
-    const gchar *version_string;
-
-	if(!str_eq(element_name, "plist")) {
-		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT, _("<plist> root element not found; got <%s> instead"), element_name);
+	ParseData *data = (ParseData *)user_data;
+		
+	if(data->retval != NULL) {
+		g_set_error(error, PLIST_ERROR, PLIST_ERROR_UNEXPECTED_OBJECT, _("Unexpected object <%s>; subsequent object ought to be enclosed in an <array> or <dict>"), element_name);
 		return;
 	}
 	
-	if(!g_markup_collect_attributes(element_name, attribute_names, attribute_values, error,
-	   G_MARKUP_COLLECT_STRING, "version", &version_string,
-	   G_MARKUP_COLLECT_INVALID))
-	    return;
-	/* Don't free version_string */
+	/* <true> - assign val here */
+	if(str_eq(element_name, "true"))
+		data->retval = g_variant_new_boolean(TRUE);
 	
-	if(!str_eq(version_string, "1.0"))
-		g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_VERSION, _("Unsupported plist version '%s'"), version_string);
-}
+	/* <false> - assign val here */
+	if(str_eq(element_name, "false"))
+		data->retval = g_variant_new_boolean(FALSE);
+	
+	/* <array> - create a new VariantBuilder and change to state array_parser */
+	if(str_eq(element_name, "array")) {
+		ParseData *new_data = g_slice_new0(ParseData);
+		new_data->builder = g_variant_builder_new(G_VARIANT_TYPE("av"));
+		g_markup_parse_context_push(context, &array_parser, new_data);
+	}
+	
+	/* <dict> - create a new VariantBuilder and change to state dict_parser */
+	else if(str_eq(element_name, "dict")) {
+		ParseData *new_data = g_slice_new0(ParseData);
+		new_data->builder = g_variant_builder_new(G_VARIANT_TYPE("a{sv}"));
+		g_markup_parse_context_push(context, &dict_parser, new_data);
+	}
 
-/* Assign a value to an already-allocated PlistObject, from an XML element
-<name> with content 'text' */
+	/* <key> - invalid if not in a <dict> */
+	else if(str_eq(element_name, "key"))
+		g_set_error(error, PLIST_ERROR, PLIST_ERROR_EXTRANEOUS_KEY, _("<key> element found outside of <dict>"));
+	
+	/* For other elements, we do not know what the content of the element is, so
+	 no variant is created until fill_object(). */
+}	
+
+/* Callback for processing content of XML elements */
 static void
-fill_object(PlistObject *current, const gchar *name, const gchar *text, GError **error)
+bare_text(GMarkupParseContext *context, const char *text, gsize text_len, gpointer user_data, GError **error)
 {
+	ParseData *data = (ParseData *)user_data;
+
+	const gchar *name = g_markup_parse_context_get_element(context);
+		
 	/* There should be no text in <true> or <false> */
 	if(str_eq(name, "true") || str_eq(name, "false"))
 		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT, _("<%s> should have no content, but found '%s'"), name, text);
@@ -98,168 +132,263 @@ fill_object(PlistObject *current, const gchar *name, const gchar *text, GError *
 	/* <real> - this assumes that property lists do NOT contain localized 
 	representation of numbers */
 	else if(str_eq(name, "real"))
-		current->real.val = g_ascii_strtod(text, NULL);
+		data->retval = g_variant_new_double(g_ascii_strtod(text, NULL));
 	
 	else if(str_eq(name, "integer"))
-		current->integer.val = atoi(text);
+		data->retval = g_variant_new_int32(atoi(text));
 	
 	else if(str_eq(name, "string"))
-		current->string.val = g_strdup(text);
+		data->retval = g_variant_new_string(text); /* copies string */
 
 	else if(str_eq(name, "date")) {
-		if(!g_time_val_from_iso8601(text, &(current->date.val)))
+		GTimeVal timeval;
+		if(!g_time_val_from_iso8601(text, &timeval))
 			g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_DATE, _("Could not parse date '%s'"), text);
+		data->retval = g_variant_new_parsed("(%x, %x)", timeval.tv_sec, timeval.tv_usec);
 	}
 	
-	else if(str_eq(name, "data"))
-		current->data.val = g_base64_decode(text, &(current->data.length));
+	else if(str_eq(name, "data")) {
+		gsize buflen = 0;
+		guchar *buffer = g_base64_decode(text, &buflen);
+		/* SUCKY DEBIAN use g_variant_new_bytestring() */
+		GVariantBuilder builder;
+		g_variant_builder_init(&builder, G_VARIANT_TYPE("ay"));
+		int count;
+		for(count = 0; count < buflen; count++)
+			g_variant_builder_add(&builder, "y", buffer[count]);
+		data->retval = g_variant_builder_end(&builder);
+		g_free(buffer);
+	}
 
-	/* else - just ignore text in <array> and <dict>, because it could be 
-	whitespace */	
+	else if(str_eq(name, "plist"))
+		return; /* Ignore white space in the outer element */
 
+	else
+		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT, _("Unknown object <%s>"), name);
+		
 	return;
-}
-
-/* Allocate a new PlistObject depending on the <name> of the XML element being
-processed. We do not know what the content of the element is, so it is not
-assigned a value until fill_object(); the exception is <true> and <false>
-elements, whose content is already obvious. */
-static PlistObject *
-start_new_object(const gchar *element_name)
-{
-	/* true - assign val here */
-	if(str_eq(element_name, "true")) {
-		PlistObject *retval = plist_object_new(PLIST_OBJECT_BOOLEAN);
-		retval->boolean.val = TRUE;
-		return retval;
-	}
-	
-	/* false - assign val here */
-	if(str_eq(element_name, "false")) {
-		PlistObject *retval = plist_object_new(PLIST_OBJECT_BOOLEAN);
-		retval->boolean.val = FALSE;
-		return retval;
-	}
-	
-	if(str_eq(element_name, "real"))
-		return plist_object_new(PLIST_OBJECT_REAL);
-	if(str_eq(element_name, "integer"))
-		return plist_object_new(PLIST_OBJECT_INTEGER);
-	if(str_eq(element_name, "string"))
-		return plist_object_new(PLIST_OBJECT_STRING);
-	if(str_eq(element_name, "date"))
-		return plist_object_new(PLIST_OBJECT_DATE);
-	if(str_eq(element_name, "data"))
-		return plist_object_new(PLIST_OBJECT_DATA);
-	if(str_eq(element_name, "array"))
-		return plist_object_new(PLIST_OBJECT_ARRAY);
-	if(str_eq(element_name, "dict"))
-		return plist_object_new(PLIST_OBJECT_DICT);
-	return NULL;
-}
-
-/* Callback for processing an opening XML element */
-static void
-element_start(GMarkupParseContext *context, const gchar *element_name, const gchar **attribute_names, const gchar **attribute_values, gpointer user_data, GError **error)
-{
-	ParseData *data = (ParseData *)user_data;
-	
-	if(data->current) {
-		g_set_error(error, PLIST_ERROR, PLIST_ERROR_UNEXPECTED_OBJECT, _("Unexpected object <%s>; subsequent objects ought to be enclosed in an <array> or <dict>"), element_name);
-		return;
-	}
-	
-	if(data->state == STATE_DICT_OBJECT && data->key == NULL && !str_eq(element_name, "key")) {
-		g_set_error(error, PLIST_ERROR, PLIST_ERROR_MISSING_KEY, _("Missing <key> for object <%s> in <dict>"), element_name);
-		return;
-	}
-	
-	data->current = start_new_object(element_name);
-	
-	/* <array> - create a new ParseData with a parent array and push this parser context 	onto the stack once more with the new ParseData */
-	if(str_eq(element_name, "array")) {
-		ParseData *new_data = g_slice_new0(ParseData);
-		new_data->state = STATE_ARRAY_OBJECT;
-		new_data->array = data->current->array.val;
-		g_markup_parse_context_push(context, &element_parser, new_data);
-	}
-	
-	/* <dict> - create a new ParseData with a parent hashtable and push this
-	parser context onto the stack once more with the new ParseData */
-	else if(str_eq(element_name, "dict")) {
-		ParseData *new_data = g_slice_new0(ParseData);
-		new_data->state = STATE_DICT_OBJECT;
-		new_data->dict = data->current->dict.val;
-		g_markup_parse_context_push(context, &element_parser, new_data);
-	}
-
-	/* <key> - invalid if not in a <dict> */
-	else if(str_eq(element_name, "key")) {
-		if(data->state != STATE_DICT_OBJECT)
-			g_set_error(error, PLIST_ERROR, PLIST_ERROR_EXTRANEOUS_KEY, _("<key> element found outside of <dict>"));
-	} 
-}	
-
-/* Callback for processing content of XML elements */
-static void
-element_text(GMarkupParseContext *context, const gchar *text, gsize text_len, gpointer user_data, GError **error)
-{	
-	ParseData *data = (ParseData *)user_data;
-
-	const gchar *name = g_markup_parse_context_get_element(context);
-	
-	fill_object(data->current, name, text, error);
-	
-	/* key */
-	if(str_eq(name, "key"))
-		data->key = g_strdup(text);
 }
 
 /* Callback for processing closing XML elements */
 static void
-element_end(GMarkupParseContext *context, const gchar *element_name, gpointer user_data, GError **error)
+bare_end(GMarkupParseContext *context, const char *element_name, gpointer user_data, GError **error)
 {	
 	ParseData *data = (ParseData *)user_data;
-
-	/* </array> - store the subparser's new head of the list in this parser's 
-	parser data */
-	if(str_eq(element_name, "array")) {
-		ParseData *sub_data = g_markup_parse_context_pop(context);
-		data->current->array.val = g_list_reverse(sub_data->array);
-		g_slice_free(ParseData, sub_data);
-	}
 	
-	/* </dict> - don't have to do anything, our copy of the hashtable is ok */
-	else if(str_eq(element_name, "dict")) {
+	/* </array>, </dict> - close the variant builder */
+	if(str_eq(element_name, "array") || str_eq(element_name, "dict")) {
 		ParseData *sub_data = g_markup_parse_context_pop(context);
+		data->retval = g_variant_builder_end(sub_data->builder);
+		g_variant_builder_unref(sub_data->builder);
 		g_slice_free(ParseData, sub_data);
+		return;
 	}
 	
 	/* If the element is still NULL, that means that the tag we have been 
-	handling wasn't recognized. Unless it was <key>. */
-	if(data->current == NULL && !str_eq(element_name, "key")) {
+	handling wasn't recognized. */
+	if(data->retval == NULL)
 		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT, _("Unknown object <%s>"), element_name);
-		return;
-	}
+	
+	/* other element - do nothing */
+}
 
-	/* any element while in array - store the element in the array and go 
-	round again */
-	if(data->state == STATE_ARRAY_OBJECT) {
-		data->array = g_list_prepend(data->array, data->current);
-		data->current = NULL;
+/* Common code for element start inside a container context (array or dict) */
+static void
+container_start(GMarkupParseContext *context, const char *element_name, ParseData *data)
+{
+	/* <array> - open a new level inside this GVariantBuilder and push the array
+	 parser context onto the stack */
+	if(str_eq(element_name, "array")) {
+		ParseData *new_data = g_slice_new0(ParseData);
+		new_data->builder = g_variant_builder_new(G_VARIANT_TYPE("av"));
+		g_markup_parse_context_push(context, &array_parser, new_data);
+	}
+	
+	/* <dict> - open a new level inside this GVariantBuilder and push the dict
+	 parser context onto the stack */
+	else if(str_eq(element_name, "dict")) {
+		ParseData *new_data = g_slice_new0(ParseData);
+		new_data->builder = g_variant_builder_new(G_VARIANT_TYPE("a{sv}"));
+		g_markup_parse_context_push(context, &dict_parser, new_data);
+	}
+}
+
+static void
+array_start(GMarkupParseContext *context, const char *element_name, const char **attribute_names, const char **attribute_values, gpointer user_data, GError **error)
+{
+	ParseData *data = (ParseData *)user_data;
+		
+	/* <true> - assign val here */
+	if(str_eq(element_name, "true"))
+		g_variant_builder_add(data->builder, "v", g_variant_new_boolean(TRUE));
+	
+	/* <false> - assign val here */
+	else if(str_eq(element_name, "false"))
+		g_variant_builder_add(data->builder, "v", g_variant_new_boolean(FALSE));
+	
+	/* <key> - invalid if not in a <dict> */
+	else if(str_eq(element_name, "key"))
+		g_set_error(error, PLIST_ERROR, PLIST_ERROR_EXTRANEOUS_KEY, _("<key> element found outside of <dict>"));
+	
+	else
+		container_start(context, element_name, data);
+}
+
+/* Common code for element content in array and dict contexts */
+static void
+array_text(GMarkupParseContext *context, const char *text, gsize text_len, gpointer user_data, GError **error)
+{
+	ParseData *data = (ParseData *)user_data;
+	
+	const gchar *name = g_markup_parse_context_get_element(context);
+		
+	/* There should be no text in <true> or <false> */
+	if(str_eq(name, "true") || str_eq(name, "false"))
+		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT, _("<%s> should have no content, but found '%s'"), name, text);
+	
+	/* <real> - this assumes that property lists do NOT contain localized 
+	 representation of numbers */
+	else if(str_eq(name, "real"))
+		g_variant_builder_add(data->builder, "v", g_variant_new_double(g_ascii_strtod(text, NULL)));
+	
+	else if(str_eq(name, "integer"))
+		g_variant_builder_add(data->builder, "v", g_variant_new_int32(atoi(text)));
+	
+	else if(str_eq(name, "string"))
+		g_variant_builder_add(data->builder, "v", g_variant_new_string(text)); /* copies string */
+	
+	else if(str_eq(name, "date")) {
+		GTimeVal timeval;
+		if(!g_time_val_from_iso8601(text, &timeval))
+			g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_DATE, _("Could not parse date '%s'"), text);
+		GVariant *date_variant = g_variant_new_parsed("(%x,%x)", timeval.tv_sec, timeval.tv_usec);
+		g_variant_builder_add(data->builder, "v", date_variant);
+	}
+	
+	else if(str_eq(name, "data")) {
+		gsize buflen = 0;
+		guchar *buffer = g_base64_decode(text, &buflen);
+		/* SUCKY DEBIAN use g_variant_new_bytestring() */
+		GVariantBuilder builder;
+		g_variant_builder_init(&builder, G_VARIANT_TYPE("ay"));
+		int count;
+		for(count = 0; count < buflen; count++)
+			g_variant_builder_add(&builder, "y", buffer[count]);
+		GVariant *data_array = g_variant_builder_end(&builder);
+		g_variant_builder_add(data->builder, "v", data_array);
+		g_free(buffer);
+	}
+	
+	/* else - just ignore text, because it could be whitespace */
+	
+	return;
+}
+
+static void
+array_end(GMarkupParseContext *context, const char *element_name, gpointer user_data, GError **error)
+{
+	ParseData *data = (ParseData *)user_data;
+	
+	/* </array>, </dict> - close the variant builder */
+	if(str_eq(element_name, "array") || str_eq(element_name, "dict")) {
+		ParseData *sub_data = g_markup_parse_context_pop(context);
+		g_variant_builder_add_value(data->builder, g_variant_builder_end(sub_data->builder));
+		g_variant_builder_unref(sub_data->builder);
+		g_slice_free(ParseData, sub_data);
+	}
+	
+	/* other element - do nothing */
+}
+
+static void
+dict_start(GMarkupParseContext *context, const char *element_name, const char **attribute_names, const char **attribute_values, gpointer user_data, GError **error)
+{
+	ParseData *data = (ParseData *)user_data;
+		
+	if(data->key == NULL && !str_eq(element_name, "key")) {
+		g_set_error(error, PLIST_ERROR, PLIST_ERROR_MISSING_KEY, _("Missing <key> for object <%s> in <dict>"), element_name);
 		return;
 	}
 	
-	/* other element while in dict - store the element in the hash table, blank 
-	the key, rinse, lather, repeat */
-	if(data->state == STATE_DICT_OBJECT && data->key != NULL && data->current != NULL) {
-		g_hash_table_insert(data->dict, data->key, data->current);
-		data->key = NULL;
-		data->current = NULL;
-		return;
+	/* <true> - assign val here */
+	else if(str_eq(element_name, "true"))
+		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_boolean(TRUE));
+	
+	/* <false> - assign val here */
+	else if(str_eq(element_name, "false"))
+		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_boolean(FALSE));
+	
+	else
+		container_start(context, element_name, data);
+}
+
+/* Callback for processing content of XML elements */
+static void
+dict_text(GMarkupParseContext *context, const char *text, gsize text_len, gpointer user_data, GError **error)
+{
+	ParseData *data = (ParseData *)user_data;
+	
+	const gchar *name = g_markup_parse_context_get_element(context);
+		
+	/* key */
+	if(str_eq(name, "key"))
+		data->key = g_strdup(text);
+	
+	/* There should be no text in <true> or <false> */
+	else if(str_eq(name, "true") || str_eq(name, "false"))
+		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT, _("<%s> should have no content, but found '%s'"), name, text);
+	
+	/* <real> - this assumes that property lists do NOT contain localized 
+	 representation of numbers */
+	else if(str_eq(name, "real"))
+		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_double(g_ascii_strtod(text, NULL)));
+	
+	else if(str_eq(name, "integer"))
+		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_int32(atoi(text)));
+	
+	else if(str_eq(name, "string"))
+		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_string(text)); /* copies string */
+	
+	else if(str_eq(name, "date")) {
+		GTimeVal timeval;
+		if(!g_time_val_from_iso8601(text, &timeval))
+			g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_DATE, _("Could not parse date '%s'"), text);
+		GVariant *date_variant = g_variant_new_parsed("(%x,%x)", timeval.tv_sec, timeval.tv_usec);
+		g_variant_builder_add(data->builder, "{sv}", data->key, date_variant);
 	}
 	
-	/* other element while in root <plist> element - leave it where it is */
+	else if(str_eq(name, "data")) {
+		gsize buflen = 0;
+		guchar *buffer = g_base64_decode(text, &buflen);
+		/* SUCKY DEBIAN use g_variant_new_bytestring() */
+		GVariantBuilder builder;
+		g_variant_builder_init(&builder, G_VARIANT_TYPE("ay"));
+		int count;
+		for(count = 0; count < buflen; count++)
+			g_variant_builder_add(&builder, "y", buffer[count]);
+		GVariant *data_array = g_variant_builder_end(&builder);
+		g_variant_builder_add(data->builder, "{sv}", data->key, data_array);
+		g_free(buffer);
+	}
+	
+	/* else - just ignore text, because it could be whitespace */
+}
+
+static void
+dict_end(GMarkupParseContext *context, const char *element_name, gpointer user_data, GError **error)
+{
+	ParseData *data = (ParseData *)user_data;
+
+	/* </array>, </dict> - close the variant builder */
+	if(str_eq(element_name, "dict") || str_eq(element_name, "array")) {
+		ParseData *sub_data = g_markup_parse_context_pop(context);
+		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_builder_end(sub_data->builder));
+		g_variant_builder_unref(sub_data->builder);
+		g_free(sub_data->key);
+		g_slice_free(ParseData, sub_data);
+	}
+	
+	/* other element - do nothing */
 }
 
 /* Callback for processing opening tag of root <plist> element */
@@ -267,28 +396,42 @@ static void
 plist_start(GMarkupParseContext *context, const gchar *element_name, const gchar **attribute_names, const gchar **attribute_values, gpointer user_data, GError **error)
 {
 	ParseData *parse_data;
+	const char *version_string;
 	
-	check_plist_element(element_name, attribute_names, attribute_values, error);
-	if(*error)
+	/* Check the root element of the plist. Make sure it is named <plist>, and that
+	 it is version 1.0 */
+	if(!str_eq(element_name, "plist")) {
+		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT, _("<plist> root element not found; got <%s> instead"), element_name);
 		return;
+	}
+	
+	if(!g_markup_collect_attributes(element_name, attribute_names, attribute_values, error,
+									G_MARKUP_COLLECT_STRING, "version", &version_string,
+									G_MARKUP_COLLECT_INVALID))
+		return;
+	/* Don't free version_string */
+	
+	if(!str_eq(version_string, "1.0")) {
+		g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_VERSION, _("Unsupported plist version '%s'"), version_string);
+		return;
+	}
 	
 	parse_data = g_slice_new0(ParseData);
-	parse_data->state = STATE_ROOT_OBJECT;
-	g_markup_parse_context_push(context, &element_parser, parse_data);
+	g_markup_parse_context_push(context, &bare_parser, parse_data);
 }
 
 /* Callback for processing closing </plist> tag */
 static void
 plist_end(GMarkupParseContext *context, const gchar *element_name, gpointer user_data, GError **error)
 {
-	PlistObject **data = (PlistObject **)user_data;
+	GVariant **data = (GVariant **)user_data;
 	
 	ParseData *parse_data = g_markup_parse_context_pop(context);
-	if(parse_data->current == NULL) {
+	if(parse_data->retval == NULL) {
 		g_set_error(error, PLIST_ERROR, PLIST_ERROR_NO_ELEMENTS, _("No objects found within <plist> root element"));
 		return;
 	}
-	*data = parse_data->current;
+	*data = parse_data->retval;
 }
 
 /**
@@ -303,11 +446,11 @@ plist_end(GMarkupParseContext *context, const gchar *element_name, gpointer user
  * @error is set. The property list must be freed with plist_object_free() after
  * use.
  */
-PlistObject *
+GVariant *
 plist_read(const gchar *filename, GError **error)
 {
 	gchar *contents;
-	PlistObject *retval;
+	GVariant *retval;
 
 	osxcart_init();
 	
@@ -333,11 +476,11 @@ plist_read(const gchar *filename, GError **error)
  * @error is set. The property list must be freed with plist_object_free() after
  * use.
  */
-PlistObject *
+GVariant *
 plist_read_from_string(const gchar *string, GError **error)
 {
 	GMarkupParseContext *context;
-	PlistObject *plist = NULL;
+	GVariant *plist = NULL;
 	
 	osxcart_init();
 
@@ -347,7 +490,6 @@ plist_read_from_string(const gchar *string, GError **error)
 	context = g_markup_parse_context_new(&plist_parser, G_MARKUP_PREFIX_ERROR_POSITION, &plist, NULL);
 	if(!g_markup_parse_context_parse(context, string, -1, error) || !g_markup_parse_context_end_parse(context, error)) {
 		g_markup_parse_context_free(context);
-		plist_object_free(plist);
 		return NULL;
 	}
 	g_markup_parse_context_free(context);
