@@ -1,4 +1,4 @@
-/* Copyright 2009 P. F. Chimento
+/* Copyright 2009, 2011 P. F. Chimento
 This file is part of Osxcart.
 
 Osxcart is free software: you can redistribute it and/or modify it under the
@@ -148,7 +148,7 @@ plist_dump(GVariant *object, PlistDumpContext *context)
 
 /**
  * plist_write:
- * @plist: A property list object.
+ * @plist: A #GVariant containing a property list.
  * @filename: The filename to write to.
  * @error: Return location for an error, or %NULL.
  *
@@ -178,7 +178,7 @@ plist_write(GVariant *plist, const gchar *filename, GError **error)
 
 /**
  * plist_write_to_string:
- * @plist: A property list object.
+ * @plist: A #GVariant containing a property list.
  * 
  * Writes the property list @plist to a string in XML format.
  *
