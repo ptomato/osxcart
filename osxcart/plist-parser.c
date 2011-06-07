@@ -26,7 +26,7 @@ parser API. */
 typedef struct {
 	GVariantBuilder *builder; /* Builder for adding objects, if in dict_parser
 							   or array_parser */
-	gchar *key;	              /* key of current object, if in dict_parser */
+	char *key;	              /* key of current object, if in dict_parser */
 	GVariant *retval;         /* toplevel object, set during bare_parser */
 } ParseData;
 
@@ -70,6 +70,57 @@ str_eq(const gchar *s1, const gchar *s2)
 	return (g_ascii_strcasecmp(s1, s2) == 0);
 }
 
+/* Common code for turning XML element name and content into a GVariant.
+ Can construct <true> or <false> if @content is NULL; requires content for any
+ other types. Returns NULL if content is missing or if type not recognized.
+ Returning NULL does not necessarily mean that @error is set. */
+static GVariant *
+construct_element(const char *name, const char *content, GError **error)
+{	
+	if(str_eq(name, "true"))
+		return g_variant_new_boolean(TRUE);
+	if(str_eq(name, "false"))
+		return g_variant_new_boolean(FALSE);
+	
+	if(content == NULL)
+		return NULL; /* content is required from now on */
+	
+	/* <real> - this assumes that property lists do NOT contain localized 
+	 representation of numbers */
+	if(str_eq(name, "real"))
+		return g_variant_new_double(g_ascii_strtod(content, NULL));
+	
+	if(str_eq(name, "integer"))
+		return g_variant_new_int32(atoi(content));
+	
+	if(str_eq(name, "string"))
+		return g_variant_new_string(content); /* copies string */
+	
+	if(str_eq(name, "date")) {
+		GTimeVal timeval;
+		if(!g_time_val_from_iso8601(content, &timeval)) {
+			g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_DATE, _("Could not parse date '%s'"), content);
+			return NULL;
+		}
+		return g_variant_new_parsed("(%x, %x)", timeval.tv_sec, timeval.tv_usec);
+	}
+	
+	if(str_eq(name, "data")) {
+		gsize buflen = 0;
+		guchar *buffer = g_base64_decode(content, &buflen);
+		/* SUCKY DEBIAN use g_variant_new_bytestring() */
+		GVariantBuilder builder;
+		g_variant_builder_init(&builder, G_VARIANT_TYPE("ay"));
+		int count;
+		for(count = 0; count < buflen; count++)
+			g_variant_builder_add(&builder, "y", buffer[count]);
+		g_free(buffer);
+		return g_variant_builder_end(&builder);
+	}
+	
+	return NULL;
+}
+
 /* Callback for processing an opening XML element. This is the outside element 
  of the plist. It could be a regular element, or a container like array or dict.
  By the time the element is closed, data->retval should point to a GVariant
@@ -87,13 +138,9 @@ bare_start(GMarkupParseContext *context, const char *element_name, const char **
 		return;
 	}
 	
-	/* <true> - assign val here */
-	if(str_eq(element_name, "true"))
-		data->retval = g_variant_new_boolean(TRUE);
-	
-	/* <false> - assign val here */
-	if(str_eq(element_name, "false"))
-		data->retval = g_variant_new_boolean(FALSE);
+	/* try <true> or <false> - assign val here; data->retval should be NULL
+	 so we don't have to check whether construct_element succeeded */
+	data->retval = construct_element(element_name, NULL, error);
 	
 	/* <array> - create a new VariantBuilder and change to state array_parser */
 	if(str_eq(element_name, "array")) {
@@ -126,47 +173,21 @@ bare_text(GMarkupParseContext *context, const char *text, gsize text_len, gpoint
 	const gchar *name = g_markup_parse_context_get_element(context);
 		
 	/* There should be no text in <true> or <false> */
-	if(str_eq(name, "true") || str_eq(name, "false"))
+	if(str_eq(name, "true") || str_eq(name, "false")) {
 		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT, _("<%s> should have no content, but found '%s'"), name, text);
-
-	/* <real> - this assumes that property lists do NOT contain localized 
-	representation of numbers */
-	else if(str_eq(name, "real"))
-		data->retval = g_variant_new_double(g_ascii_strtod(text, NULL));
-	
-	else if(str_eq(name, "integer"))
-		data->retval = g_variant_new_int32(atoi(text));
-	
-	else if(str_eq(name, "string"))
-		data->retval = g_variant_new_string(text); /* copies string */
-
-	else if(str_eq(name, "date")) {
-		GTimeVal timeval;
-		if(!g_time_val_from_iso8601(text, &timeval))
-			g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_DATE, _("Could not parse date '%s'"), text);
-		data->retval = g_variant_new_parsed("(%x, %x)", timeval.tv_sec, timeval.tv_usec);
-	}
-	
-	else if(str_eq(name, "data")) {
-		gsize buflen = 0;
-		guchar *buffer = g_base64_decode(text, &buflen);
-		/* SUCKY DEBIAN use g_variant_new_bytestring() */
-		GVariantBuilder builder;
-		g_variant_builder_init(&builder, G_VARIANT_TYPE("ay"));
-		int count;
-		for(count = 0; count < buflen; count++)
-			g_variant_builder_add(&builder, "y", buffer[count]);
-		data->retval = g_variant_builder_end(&builder);
-		g_free(buffer);
+		return;
 	}
 
-	else if(str_eq(name, "plist"))
+	GVariant *value = construct_element(name, text, error);
+	if(value != NULL) {
+		data->retval = value;
+		return;
+	}
+
+	if(str_eq(name, "plist"))
 		return; /* Ignore white space in the outer element */
 
-	else
-		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT, _("Unknown object <%s>"), name);
-		
-	return;
+	g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_UNKNOWN_ELEMENT, _("Unknown object <%s>"), name);
 }
 
 /* Callback for processing closing XML elements */
@@ -218,13 +239,10 @@ array_start(GMarkupParseContext *context, const char *element_name, const char *
 {
 	ParseData *data = (ParseData *)user_data;
 		
-	/* <true> - assign val here */
-	if(str_eq(element_name, "true"))
-		g_variant_builder_add(data->builder, "v", g_variant_new_boolean(TRUE));
-	
-	/* <false> - assign val here */
-	else if(str_eq(element_name, "false"))
-		g_variant_builder_add(data->builder, "v", g_variant_new_boolean(FALSE));
+	/* <true>, <false> - assign val here */
+	GVariant *value = construct_element(element_name, NULL, error);
+	if(value != NULL)
+		g_variant_builder_add(data->builder, "v", value);
 	
 	/* <key> - invalid if not in a <dict> */
 	else if(str_eq(element_name, "key"))
@@ -243,45 +261,16 @@ array_text(GMarkupParseContext *context, const char *text, gsize text_len, gpoin
 	const gchar *name = g_markup_parse_context_get_element(context);
 		
 	/* There should be no text in <true> or <false> */
-	if(str_eq(name, "true") || str_eq(name, "false"))
+	if(str_eq(name, "true") || str_eq(name, "false")) {
 		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT, _("<%s> should have no content, but found '%s'"), name, text);
-	
-	/* <real> - this assumes that property lists do NOT contain localized 
-	 representation of numbers */
-	else if(str_eq(name, "real"))
-		g_variant_builder_add(data->builder, "v", g_variant_new_double(g_ascii_strtod(text, NULL)));
-	
-	else if(str_eq(name, "integer"))
-		g_variant_builder_add(data->builder, "v", g_variant_new_int32(atoi(text)));
-	
-	else if(str_eq(name, "string"))
-		g_variant_builder_add(data->builder, "v", g_variant_new_string(text)); /* copies string */
-	
-	else if(str_eq(name, "date")) {
-		GTimeVal timeval;
-		if(!g_time_val_from_iso8601(text, &timeval))
-			g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_DATE, _("Could not parse date '%s'"), text);
-		GVariant *date_variant = g_variant_new_parsed("(%x,%x)", timeval.tv_sec, timeval.tv_usec);
-		g_variant_builder_add(data->builder, "v", date_variant);
+		return;
 	}
 	
-	else if(str_eq(name, "data")) {
-		gsize buflen = 0;
-		guchar *buffer = g_base64_decode(text, &buflen);
-		/* SUCKY DEBIAN use g_variant_new_bytestring() */
-		GVariantBuilder builder;
-		g_variant_builder_init(&builder, G_VARIANT_TYPE("ay"));
-		int count;
-		for(count = 0; count < buflen; count++)
-			g_variant_builder_add(&builder, "y", buffer[count]);
-		GVariant *data_array = g_variant_builder_end(&builder);
-		g_variant_builder_add(data->builder, "v", data_array);
-		g_free(buffer);
-	}
+	GVariant *value = construct_element(name, text, error);
+	if(value != NULL)
+		g_variant_builder_add(data->builder, "v", value);
 	
 	/* else - just ignore text, because it could be whitespace */
-	
-	return;
 }
 
 static void
@@ -311,12 +300,9 @@ dict_start(GMarkupParseContext *context, const char *element_name, const char **
 	}
 	
 	/* <true> - assign val here */
-	else if(str_eq(element_name, "true"))
-		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_boolean(TRUE));
-	
-	/* <false> - assign val here */
-	else if(str_eq(element_name, "false"))
-		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_boolean(FALSE));
+	GVariant *value = construct_element(element_name, NULL, error);
+	if(value != NULL)
+		g_variant_builder_add(data->builder, "{sv}", data->key, value);
 	
 	else
 		container_start(context, element_name, data);
@@ -331,46 +317,21 @@ dict_text(GMarkupParseContext *context, const char *text, gsize text_len, gpoint
 	const gchar *name = g_markup_parse_context_get_element(context);
 		
 	/* key */
-	if(str_eq(name, "key"))
+	if(str_eq(name, "key")) {
 		data->key = g_strdup(text);
+		return;
+	}
 	
 	/* There should be no text in <true> or <false> */
-	else if(str_eq(name, "true") || str_eq(name, "false"))
+	if(str_eq(name, "true") || str_eq(name, "false")) {
 		g_set_error(error, G_MARKUP_ERROR, G_MARKUP_ERROR_INVALID_CONTENT, _("<%s> should have no content, but found '%s'"), name, text);
-	
-	/* <real> - this assumes that property lists do NOT contain localized 
-	 representation of numbers */
-	else if(str_eq(name, "real"))
-		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_double(g_ascii_strtod(text, NULL)));
-	
-	else if(str_eq(name, "integer"))
-		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_int32(atoi(text)));
-	
-	else if(str_eq(name, "string"))
-		g_variant_builder_add(data->builder, "{sv}", data->key, g_variant_new_string(text)); /* copies string */
-	
-	else if(str_eq(name, "date")) {
-		GTimeVal timeval;
-		if(!g_time_val_from_iso8601(text, &timeval))
-			g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_DATE, _("Could not parse date '%s'"), text);
-		GVariant *date_variant = g_variant_new_parsed("(%x,%x)", timeval.tv_sec, timeval.tv_usec);
-		g_variant_builder_add(data->builder, "{sv}", data->key, date_variant);
+		return;
 	}
 	
-	else if(str_eq(name, "data")) {
-		gsize buflen = 0;
-		guchar *buffer = g_base64_decode(text, &buflen);
-		/* SUCKY DEBIAN use g_variant_new_bytestring() */
-		GVariantBuilder builder;
-		g_variant_builder_init(&builder, G_VARIANT_TYPE("ay"));
-		int count;
-		for(count = 0; count < buflen; count++)
-			g_variant_builder_add(&builder, "y", buffer[count]);
-		GVariant *data_array = g_variant_builder_end(&builder);
-		g_variant_builder_add(data->builder, "{sv}", data->key, data_array);
-		g_free(buffer);
-	}
-	
+	GVariant *value = construct_element(name, text, error);
+	if(value != NULL)
+		g_variant_builder_add(data->builder, "{sv}", data->key, value);
+
 	/* else - just ignore text, because it could be whitespace */
 }
 
