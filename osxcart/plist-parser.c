@@ -1,4 +1,4 @@
-/* Copyright 2009 P. F. Chimento
+/* Copyright 2009, 2011 P. F. Chimento
 This file is part of Osxcart.
 
 Osxcart is free software: you can redistribute it and/or modify it under the
@@ -400,12 +400,11 @@ plist_end(GMarkupParseContext *context, const gchar *element_name, gpointer user
  * @filename: The path to a file containing a property list in XML format.
  * @error: Return location for an error, or %NULL.
  *
- * Reads a property list in XML format from @filename and returns a #PlistObject 
+ * Reads a property list in XML format from @filename and returns a #GVariant 
  * representing the property list.
  *
- * Returns: the property list, or %NULL if an error occurred, in which case
- * @error is set. The property list must be freed with plist_object_free() after
- * use.
+ * Returns: the property list as a #GVariant, or %NULL if an error occurred, in
+ * which case @error is set. The #GVariant has a floating reference.
  */
 GVariant *
 plist_read(const gchar *filename, GError **error)
@@ -430,12 +429,11 @@ plist_read(const gchar *filename, GError **error)
  * @string: A string containing a property list in XML format.
  * @error: Return location for an error, or %NULL.
  *
- * Reads a property list in XML format from @string and returns a #PlistObject
+ * Reads a property list in XML format from @string and returns a #GVariant
  * representing the property list.
  *
- * Returns: the property list, or %NULL if an error occurred, in which case
- * @error is set. The property list must be freed with plist_object_free() after
- * use.
+ * Returns: the property list as a #GVariant, or %NULL if an error occurred, in
+ * which case @error is set. The #GVariant has a floating reference.
  */
 GVariant *
 plist_read_from_string(const gchar *string, GError **error)

@@ -1,7 +1,7 @@
 #ifndef __OSXCART_PLIST_H__
 #define __OSXCART_PLIST_H__
 
-/* Copyright 2009 P. F. Chimento
+/* Copyright 2009, 2011 P. F. Chimento
 This file is part of Osxcart.
 
 Osxcart is free software: you can redistribute it and/or modify it under the
@@ -23,19 +23,27 @@ G_BEGIN_DECLS
 
 /**
  * PlistError:
+ * @PLIST_ERROR_FAILED: A generic error.
+ * @PLIST_ERROR_BAD_VERSION: The plist was an incompatible version.
+ * @PLIST_ERROR_UNEXPECTED_OBJECT: An object was out of place in the plist.
+ * @PLIST_ERROR_EXTRANEOUS_KEY: A <code>&lt;key&gt;</code> element was
+ * encountered outside a <code>&lt;dict&gt;</code> object.
+ * @PLIST_ERROR_MISSING_KEY: A <code>&lt;dict&gt;</code> object was missing a
+ * <code>&lt;key&gt;</code> element.
+ * @PLIST_ERROR_BAD_DATE: A <code>&lt;date&gt;</code> object contained incorrect
+ * formatting.
+ * @PLIST_ERROR_NO_ELEMENTS: The plist was empty.
  *
  * The different error codes which can be thrown in the #PLIST_ERROR domain.
  */
 typedef enum {
-	PLIST_ERROR_FAILED,            /* Generic error */
-	PLIST_ERROR_BAD_VERSION,       /* The plist was an incompatible version */
-	PLIST_ERROR_UNEXPECTED_OBJECT, /* An object was out of place in the plist */
-	PLIST_ERROR_EXTRANEOUS_KEY,    /* A <key> element was encountered outside a
-	                                  <dict> object */
-	PLIST_ERROR_MISSING_KEY,       /* A <dict> object was missing a <key> */
-	PLIST_ERROR_BAD_DATE,          /* A <date> object contained incorrect
-	                                  formatting */
-	PLIST_ERROR_NO_ELEMENTS        /* The plist was empty */
+	PLIST_ERROR_FAILED,
+	PLIST_ERROR_BAD_VERSION,
+	PLIST_ERROR_UNEXPECTED_OBJECT,
+	PLIST_ERROR_EXTRANEOUS_KEY,
+	PLIST_ERROR_MISSING_KEY,
+	PLIST_ERROR_BAD_DATE,
+	PLIST_ERROR_NO_ELEMENTS
 } PlistError;
 
 /**

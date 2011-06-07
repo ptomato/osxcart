@@ -1,4 +1,4 @@
-/* Copyright 2009 P. F. Chimento
+/* Copyright 2009, 2011 P. F. Chimento
 This file is part of Osxcart.
 
 Osxcart is free software: you can redistribute it and/or modify it under the
@@ -33,6 +33,72 @@ with Osxcart.  If not, see <http://www.gnu.org/licenses/>. */
  * <ulink 
  * link="http://developer.apple.com/documentation/Darwin/Reference/ManPages/man5/plist.5.html">
  * Apple developer documentation</ulink>.
+ *
+ * Instead of deserializing the property list into Core Foundation types as in
+ * Mac OS X, the property list is represented using a hierarchical structure of
+ * #GVariant<!---->s, lightweight objects that can contain any type of data.
+ * Earlier versions of the Osxcart library used custom structures for this
+ * purpose, but since the addition of #GVariant to GLib, this was changed in
+ * order to avoid duplication of functionality.
+ *
+ * Most property list object types have a corresponding #GVariant data type, but
+ * for example, dates are stored as a #GVariant tuple of int64 values
+ * corresponding to the @tv_sec and @tv_usec fields of #GTimeVal. For
+ * completeness, the data types are listed here:
+ *
+ * <informaltable>
+ *   <tgroup cols='3'>
+ *     <thead>
+ *       <row>
+ *         <entry>XML Element</entry>
+ *         <entry>Core Foundation data type</entry>
+ *         <entry>GVariant type symbol</entry>
+ *       </row>
+ *     </thead>
+ *     <tbody>
+ *       <row>
+ *         <entry><code>true</code>, <code>false</code></entry>
+ *         <entry><code>CFBoolean</code></entry>
+ *         <entry><code>b</code></entry>
+ *       </row>
+ *       <row>
+ *         <entry><code>integer</code></entry>
+ *         <entry><code>CFNumber</code></entry>
+ *         <entry><code>i</code></entry>
+ *       </row>
+ *       <row>
+ *         <entry><code>real</code></entry>
+ *         <entry><code>CFNumber</code></entry>
+ *         <entry><code>d</code></entry>
+ *       </row>
+ *       <row>
+ *         <entry><code>string</code></entry>
+ *         <entry><code>CFString</code></entry>
+ *         <entry><code>s</code></entry>
+ *       </row>
+ *       <row>
+ *         <entry><code>date</code></entry>
+ *         <entry><code>CFDate</code></entry>
+ *         <entry><code>(xx)</code></entry>
+ *       </row>
+ *       <row>
+ *         <entry><code>data</code></entry>
+ *         <entry><code>CFData</code></entry>
+ *         <entry><code>ay</code></entry>
+ *       </row>
+ *       <row>
+ *         <entry><code>array</code></entry>
+ *         <entry><code>CFArray</code></entry>
+ *         <entry><code>av</code></entry>
+ *       </row>
+ *       <row>
+ *         <entry><code>dict</code></entry>
+ *         <entry><code>CFDictionary</code></entry>
+ *         <entry><code>a{sv}</code></entry>
+ *       </row>
+ *     </tbody>
+ *   </tgroup>
+ * </informaltable>
  */
 
 /**
