@@ -46,10 +46,10 @@ if HAVE_INTROSPECTION
 # There can't be two namespaces in one .gir file?
 
 OsxcartPlist-1.0.gir: libosxcart.la
-OsxcartPlist_1_0_gir_INCLUDES = GObject-2.0 GLib-2.0
-OsxcartPlist_1_0_gir_CFLAGS = $(INCLUDES)
+OsxcartPlist_1_0_gir_INCLUDES = GLib-2.0
+OsxcartPlist_1_0_gir_CFLAGS = @OSXCART_CFLAGS@
 OsxcartPlist_1_0_gir_LIBS = libosxcart.la
-OsxcartPlist_1_0_gir_FILES = plist.h
+OsxcartPlist_1_0_gir_FILES = plist.h plist.c plist-parser.c plist-write.c
 OsxcartPlist_1_0_gir_SCANNERFLAGS = \
 	--identifier-prefix=Plist \
 	--c-include=osxcart/plist.h \
@@ -57,12 +57,12 @@ OsxcartPlist_1_0_gir_SCANNERFLAGS = \
 INTROSPECTION_GIRS += OsxcartPlist-1.0.gir
 
 OsxcartRtf-1.0.gir: libosxcart.la
-OsxcartRtf_1_0_gir_INCLUDES = GObject-2.0 GLib-2.0 # Gdk-2.0 GdkPixbuf-2.0 Gtk-2.0
-# PACKAGES necessary because OS X doesn't support GTK 2 with introspection
-OsxcartRtf_1_0_gir_PACKAGES = gobject-2.0 glib-2.0 gdk-2.0 gdk-pixbuf-2.0 gtk+-2.0
-OsxcartRtf_1_0_gir_CFLAGS = $(INCLUDES)
+OsxcartRtf_1_0_gir_INCLUDES = Gtk-2.0
+# PACKAGES necessary because MacPorts doesn't support GTK 2 with introspection
+OsxcartRtf_1_0_gir_PACKAGES = gtk+-2.0
+OsxcartRtf_1_0_gir_CFLAGS = @OSXCART_CFLAGS@
 OsxcartRtf_1_0_gir_LIBS = libosxcart.la
-OsxcartRtf_1_0_gir_FILES = rtf.h
+OsxcartRtf_1_0_gir_FILES = rtf.h rtf.c
 OsxcartRtf_1_0_gir_SCANNERFLAGS = \
 	--identifier-prefix=Rtf \
 	--c-include=osxcart/rtf.h \
