@@ -32,3 +32,49 @@ libosxcart_la_LDFLAGS = -version-info $(LT_VERSION_INFO) \
 						-export-symbols-regex "^(plist|rtf)_"
 libosxcart_includedir = $(includedir)/osxcart/osxcart
 libosxcart_include_HEADERS = plist.h rtf.h
+
+CLEANFILES=
+
+# Introspection boilerplate
+-include $(INTROSPECTION_MAKEFILE)
+INTROSPECTION_GIRS =
+INTROSPECTION_SCANNER_ARGS = --add-include-path=$(srcdir)
+INTROSPECTION_COMPILER_ARGS = --includedir=$(srcdir)
+
+if HAVE_INTROSPECTION
+
+# There can't be two namespaces in one .gir file?
+
+OsxcartPlist-1.0.gir: libosxcart.la
+OsxcartPlist_1_0_gir_INCLUDES = GObject-2.0 GLib-2.0
+OsxcartPlist_1_0_gir_CFLAGS = $(INCLUDES)
+OsxcartPlist_1_0_gir_LIBS = libosxcart.la
+OsxcartPlist_1_0_gir_FILES = plist.h
+OsxcartPlist_1_0_gir_SCANNERFLAGS = \
+	--identifier-prefix=Plist \
+	--c-include=osxcart/plist.h \
+	--warn-all
+INTROSPECTION_GIRS += OsxcartPlist-1.0.gir
+
+OsxcartRtf-1.0.gir: libosxcart.la
+OsxcartRtf_1_0_gir_INCLUDES = GObject-2.0 GLib-2.0 # Gdk-2.0 GdkPixbuf-2.0 Gtk-2.0
+# PACKAGES necessary because OS X doesn't support GTK 2 with introspection
+OsxcartRtf_1_0_gir_PACKAGES = gobject-2.0 glib-2.0 gdk-2.0 gdk-pixbuf-2.0 gtk+-2.0
+OsxcartRtf_1_0_gir_CFLAGS = $(INCLUDES)
+OsxcartRtf_1_0_gir_LIBS = libosxcart.la
+OsxcartRtf_1_0_gir_FILES = rtf.h
+OsxcartRtf_1_0_gir_SCANNERFLAGS = \
+	--identifier-prefix=Rtf \
+	--c-include=osxcart/rtf.h \
+	--warn-all
+INTROSPECTION_GIRS += OsxcartRtf-1.0.gir
+
+girdir = $(datadir)/gir-1.0
+gir_DATA = $(INTROSPECTION_GIRS)
+
+typelibdir = $(libdir)/girepository-1.0
+typelib_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
+
+CLEANFILES += $(gir_DATA) $(typelib_DATA)
+endif
+
