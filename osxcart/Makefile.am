@@ -78,3 +78,8 @@ typelib_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
 CLEANFILES += $(gir_DATA) $(typelib_DATA)
 endif
 
+# Currently, install the Vala VAPI file statically - generation is broken?
+
+vapidir = $(datadir)/vala/vapi
+dist_vapi_DATA = osxcart.vapi
+
