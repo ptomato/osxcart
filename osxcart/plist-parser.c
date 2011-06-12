@@ -102,7 +102,7 @@ construct_element(const char *name, const char *content, GError **error)
 			g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_DATE, _("Could not parse date '%s'"), content);
 			return NULL;
 		}
-		return g_variant_new_parsed("(%x, %x)", timeval.tv_sec, timeval.tv_usec);
+		return g_variant_new_parsed("(%x, %x)", (gint64)timeval.tv_sec, (gint64)timeval.tv_usec);
 	}
 	
 	if(str_eq(name, "data")) {
