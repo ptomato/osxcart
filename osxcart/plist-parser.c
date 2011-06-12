@@ -134,7 +134,7 @@ bare_start(GMarkupParseContext *context, const char *element_name, const char **
 	ParseData *data = (ParseData *)user_data;
 		
 	if(data->retval != NULL) {
-		g_set_error(error, PLIST_ERROR, PLIST_ERROR_UNEXPECTED_OBJECT, _("Unexpected object <%s>; subsequent object ought to be enclosed in an <array> or <dict>"), element_name);
+		g_set_error(error, PLIST_ERROR, PLIST_ERROR_UNEXPECTED_OBJECT, _("Unexpected object <%s>; subsequent objects ought to be enclosed in an <array> or <dict>"), element_name);
 		return;
 	}
 	
