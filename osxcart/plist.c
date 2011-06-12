@@ -106,8 +106,8 @@ with Osxcart.  If not, see <http://www.gnu.org/licenses/>. */
  *
  * The error domain for property list errors.
  *
- * Returns: The string <quote>plist-error-quark</quote> as a <link 
- * linkend="GQuark">GQuark</link>.
+ * Returns: (transfer none): The string <quote>plist-error-quark</quote> as a
+ * <link linkend="GQuark">GQuark</link>.
  */
 GQuark
 plist_error_quark(void)
@@ -156,11 +156,11 @@ plist_error_quark(void)
  * the integer 1, although they will both point to two different spots in the
  * @plist tree. 
  * 
- * Returns: The requested #GVariant, or %NULL if the path did not exist. The 
- * returned object is a pointer to the object within the original @tree, and is 
- * not given an extra reference. Therefore, it should not be unreferenced when
- * you are done with it; conversely, if you want to keep it around longer than
- * the lifetime of @tree, you should reference it.
+ * Returns: (transfer none): The requested #GVariant, or %NULL if the path did
+ * not exist. The returned object is a pointer to the object within the original
+ * @tree, and is not given an extra reference. Therefore, it should not be
+ * unreferenced when you are done with it; conversely, if you want to keep it
+ * around longer than the lifetime of @tree, you should reference it.
  */
 GVariant *
 plist_object_lookup(GVariant *tree, ...)
