@@ -83,3 +83,5 @@ endif
 vapidir = $(datadir)/vala/vapi
 dist_vapi_DATA = osxcart.vapi
 
+
+-include $(top_srcdir)/git.mk
