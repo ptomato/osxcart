@@ -5,7 +5,7 @@ AC_PREREQ([2.62]) # Earliest version that works with gobject introspection
 
 ### INITIALIZATION #############################################################
 
-AC_INIT([Osxcart], [1.2.1])
+AC_INIT([Osxcart], [1.99.0])
 AC_CONFIG_SRCDIR([testcases/test.c]) # Sanity check
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11 -Wall -Wno-portability foreign parallel-tests
@@ -41,10 +41,10 @@ dnl Adding arguments in configure.ac requires gtk-doc 1.14
 
 ### LIBRARIES ##################################################################
 
-OSXCART_REQUIRES="glib-2.0 >= 2.18 gio-2.0 >= 2.18 gdk-2.0 gtk+-2.0 >= 2.10"
+OSXCART_REQUIRES="glib-2.0 >= 2.18 gio-2.0 >= 2.18 gdk-3.0 gtk+-3.0"
 OSXCART_REQUIRES_PRIVATE="gdk-pixbuf-2.0 >= 2.6"
 PKG_CHECK_MODULES([OSXCART], [$OSXCART_REQUIRES $OSXCART_REQUIRES_PRIVATE])
-PKG_CHECK_MODULES([TEST], [glib-2.0 gtk+-2.0])
+PKG_CHECK_MODULES([TEST], [glib-2.0 gtk+-3.0])
 AC_SUBST([OSXCART_REQUIRES])
 AC_SUBST([OSXCART_REQUIRES_PRIVATE])
 
