@@ -48,6 +48,11 @@ PKG_CHECK_MODULES([TEST], [glib-2.0 gtk+-3.0])
 AC_SUBST([OSXCART_REQUIRES])
 AC_SUBST([OSXCART_REQUIRES_PRIVATE])
 
+PKG_CHECK_MODULES([GLIB260], [glib-2.0 >= 2.60],
+	[AC_DEFINE([GLIB_VERSION_MIN_REQUIRED], [GLIB_VERSION_2_60],
+		[Ignore massive GTimeVal deprecation warnings in 2.62])],
+	[true])
+
 ### HEADER FILES ###############################################################
 
 AC_CHECK_HEADERS([stdlib.h string.h])
