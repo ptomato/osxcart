@@ -1,4 +1,4 @@
-/* Copyright 2009, 2011 P. F. Chimento
+/* Copyright 2009, 2011, 2019 P. F. Chimento
 This file is part of Osxcart.
 
 Osxcart is free software: you can redistribute it and/or modify it under the
@@ -13,13 +13,16 @@ PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License along
 with Osxcart.  If not, see <http://www.gnu.org/licenses/>. */
 
+#include "config.h"
+
 #include <stdlib.h>
-#include <glib.h>
+
 #include <gio/gio.h>
-#include <config.h>
+#include <glib.h>
 #include <glib/gi18n-lib.h>
-#include <osxcart/plist.h>
+
 #include "init.h"
+#include "plist.h"
 
 /* plist-parser.c - This is a plist parser implemented in GLib's GMarkup SAX
 parser API. It requires Glib 2.18 or later. */

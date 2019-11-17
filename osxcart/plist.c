@@ -1,4 +1,4 @@
-/* Copyright 2009, 2011, 2012 P. F. Chimento
+/* Copyright 2009, 2011, 2012, 2019 P. F. Chimento
 This file is part of Osxcart.
 
 Osxcart is free software: you can redistribute it and/or modify it under the
@@ -13,13 +13,16 @@ PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License along
 with Osxcart.  If not, see <http://www.gnu.org/licenses/>. */
 
+#include "config.h"
+
 #include <stdarg.h>
-#include <glib.h>
+
 #include <gio/gio.h>
-#include <config.h>
+#include <glib.h>
 #include <glib/gi18n-lib.h>
-#include <osxcart/plist.h>
+
 #include "init.h"
+#include "plist.h"
 
 /**
  * SECTION:plist
