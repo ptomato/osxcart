@@ -101,12 +101,12 @@ typedef struct {
  * @type: Must be %PLIST_OBJECT_DATE
  * @val: The date
  *
- * A #PlistObject which contains a date in GLib's timeval format, similar to
+ * A #PlistObject which contains a date in GLib's format, similar to
  * <code>CFDate</code>.
  */
 typedef struct {
     PlistObjectType type;
-    GTimeVal val;
+    GDateTime *val;
 } PlistObjectDate;
 
 /**
@@ -234,26 +234,7 @@ gboolean plist_object_get_boolean(PlistObject *object);
 double plist_object_get_real(PlistObject *object);
 int plist_object_get_integer(PlistObject *object);
 const char *plist_object_get_string(PlistObject *object);
-/* We silence a warning about ignored const for plist_object_get_date(); the
-const has a meaning to the introspection bindings. The push/pop pragmas are only
-supported from GCC 4.6 onwards, and the warning option is only supported from
-4.3 onwards, so this is quite messy. */
-#ifndef __GTK_DOC_IGNORE__
-#define GCC_AT_LEAST(maj, min) defined(__GNUC__) && (__GNUC__ > maj || (__GNUC__ == maj && __GNUC_MINOR__ >= min))
-#if GCC_AT_LEAST(4, 6) || defined(__clang__)
-#pragma GCC diagnostic push
-#endif /* GCC 4.6 or Clang */
-#if GCC_AT_LEAST(4, 3) || defined(__clang__)
-#pragma GCC diagnostic ignored "-Wignored-qualifiers"
-#endif /* GCC 4.3 or Clang */
-#endif /* __GTK_DOC_IGNORE__ */
-const GTimeVal plist_object_get_date(PlistObject *object);
-#ifndef __GTK_DOC_IGNORE__
-#if GCC_AT_LEAST(4, 6) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif /* GCC 4.6 or Clang*/
-#undef GCC_AT_LEAST
-#endif /* __GTK_DOC_IGNORE__ */
+GDateTime *plist_object_get_date(PlistObject *object);
 GList *plist_object_get_array(PlistObject *object);
 GHashTable *plist_object_get_dict(PlistObject *object);
 unsigned char *plist_object_get_data(PlistObject *object, size_t *length);
@@ -262,7 +243,7 @@ void plist_object_set_boolean(PlistObject *object, gboolean val);
 void plist_object_set_real(PlistObject *object, double val);
 void plist_object_set_integer(PlistObject *object, int val);
 void plist_object_set_string(PlistObject *object, const char *val);
-void plist_object_set_date(PlistObject *object, GTimeVal val);
+void plist_object_set_date(PlistObject *object, GDateTime *val);
 void plist_object_set_array(PlistObject *object, GList *val);
 void plist_object_set_dict(PlistObject *object, GHashTable *val);
 void plist_object_set_data(PlistObject *object, unsigned char *val, size_t length);

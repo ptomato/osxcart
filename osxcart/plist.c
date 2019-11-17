@@ -340,16 +340,6 @@ plist_object_get_string(PlistObject *object)
     return object->string.val;
 }
 
-/* See explanation in plist.h */
-#ifndef __GTK_DOC_IGNORE__
-#define GCC_AT_LEAST(maj, min) defined(__GNUC__) && (__GNUC__ > maj || (__GNUC__ == maj && __GNUC_MINOR__ >= min))
-#if GCC_AT_LEAST(4, 6) || defined(__clang__)
-#pragma GCC diagnostic push
-#endif /* GCC 4.6 or Clang */
-#if GCC_AT_LEAST(4, 3) || defined(__clang__)
-#pragma GCC diagnostic ignored "-Wignored-qualifiers"
-#endif /* GCC 4.3 or Clang */
-#endif /* __GTK_DOC_IGNORE__ */
 /**
  * plist_object_get_date:
  * @object: a #PlistObject holding a date
@@ -357,23 +347,17 @@ plist_object_get_string(PlistObject *object)
  * This function is intended for bindings to other programming languages; in C,
  * you can simply use <code>object->date.val</code>.
  *
- * Returns: (transfer none): the date value held by @object as a #GTimeVal.
+ * Returns: (transfer none): the date value held by @object as a #GDateTime.
  *
  * Since: 1.1
  */
-const GTimeVal
+GDateTime *
 plist_object_get_date(PlistObject *object)
 {
-    g_return_val_if_fail(object != NULL, ((GTimeVal){0, 0}));
-    g_return_val_if_fail(object->type == PLIST_OBJECT_DATE, ((GTimeVal){0, 0}));
+    g_return_val_if_fail(object != NULL, NULL);
+    g_return_val_if_fail(object->type == PLIST_OBJECT_DATE, NULL);
     return object->date.val;
 }
-#ifndef __GTK_DOC_IGNORE__
-#if GCC_AT_LEAST(4, 6) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif /* GCC 4.6 or Clang*/
-#undef GCC_AT_LEAST
-#endif /* __GTK_DOC_IGNORE__ */
 
 /**
  * plist_object_get_array:
@@ -524,11 +508,13 @@ plist_object_set_string(PlistObject *object, const char *val)
  * Since: 1.1
  */
 void
-plist_object_set_date(PlistObject *object, GTimeVal val)
+plist_object_set_date(PlistObject *object, GDateTime *val)
 {
     g_return_if_fail(object != NULL);
+    g_return_if_fail(val != NULL);
     g_return_if_fail(object->type == PLIST_OBJECT_DATE);
-    object->date.val = val;
+    g_date_time_unref(object->date.val);
+    object->date.val = g_date_time_ref(val);
 }
 
 /**

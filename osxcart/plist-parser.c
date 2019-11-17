@@ -110,7 +110,9 @@ fill_object(PlistObject *current, const gchar *name, const gchar *text, GError *
         current->string.val = g_strdup(text);
 
     else if(str_eq(name, "date")) {
-        if(!g_time_val_from_iso8601(text, &(current->date.val)))
+        g_autoptr(GTimeZone) tz_local = g_time_zone_new_local();
+        current->date.val = g_date_time_new_from_iso8601(text, tz_local);
+        if (!current->date.val)
             g_set_error(error, PLIST_ERROR, PLIST_ERROR_BAD_DATE, _("Could not parse date '%s'"), text);
     }
 

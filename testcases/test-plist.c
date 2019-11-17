@@ -137,8 +137,14 @@ plist_copy_test()
 
 	obj = plist_object_lookup(copy, "Date", -1);
 	g_assert(obj->type == PLIST_OBJECT_DATE);
-	g_assert_cmpint(obj->date.val.tv_sec, ==, 1240436323);
-	g_assert_cmpint(obj->date.val.tv_usec, ==, 501773);
+	g_assert_cmpint(g_date_time_get_year(obj->date.val), ==, 2009);
+	g_assert_cmpint(g_date_time_get_month(obj->date.val), ==, 4);
+	g_assert_cmpint(g_date_time_get_day_of_month(obj->date.val), ==, 22);
+	g_assert_cmpint(g_date_time_get_hour(obj->date.val), ==, 21);
+	g_assert_cmpint(g_date_time_get_minute(obj->date.val), ==, 38);
+	g_assert_cmpint(g_date_time_get_second(obj->date.val), ==, 43);
+	g_assert_cmpint(g_date_time_get_microsecond(obj->date.val), ==, 501773);
+	g_assert_cmpint(g_date_time_get_utc_offset(obj->date.val), ==, 0);
 
 	obj = plist_object_lookup(copy, "Dict", -1);
 	g_assert(obj->type == PLIST_OBJECT_DICT);
@@ -186,7 +192,7 @@ plist_accessor_test()
 	PlistObject *list = NULL, *obj = NULL;
 	const unsigned char *data;
 	size_t length;
-	GTimeVal timeval;
+	GDateTime *dt;
 	char *filename = build_filename("oneofeach.plist");
 
 	list = plist_read(filename, &error);
@@ -212,9 +218,15 @@ plist_accessor_test()
 	g_assert_cmpint(length, ==, 5);
 
 	obj = plist_object_lookup(list, "Date", -1);
-	timeval = plist_object_get_date(obj);
-	g_assert_cmpint(timeval.tv_sec, ==, 1240436323);
-	g_assert_cmpint(timeval.tv_usec, ==, 501773);
+	dt = plist_object_get_date(obj);
+	g_assert_cmpint(g_date_time_get_year(dt), ==, 2009);
+	g_assert_cmpint(g_date_time_get_month(dt), ==, 4);
+	g_assert_cmpint(g_date_time_get_day_of_month(dt), ==, 22);
+	g_assert_cmpint(g_date_time_get_hour(dt), ==, 21);
+	g_assert_cmpint(g_date_time_get_minute(dt), ==, 38);
+	g_assert_cmpint(g_date_time_get_second(dt), ==, 43);
+	g_assert_cmpint(g_date_time_get_microsecond(dt), ==, 501773);
+	g_assert_cmpint(g_date_time_get_utc_offset(dt), ==, 0);
 
 	obj = plist_object_lookup(list, "Dict", -1);
 	g_assert(plist_object_get_dict(obj));
@@ -251,6 +263,7 @@ static void
 plist_set_accessor_test()
 {
 	PlistObject *obj = NULL;
+	GDateTime *dt = g_date_time_new_now_local();
 	GHashTable *hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, (GDestroyNotify)plist_object_free);
 
 	obj = plist_object_new(PLIST_OBJECT_BOOLEAN);
@@ -269,9 +282,8 @@ plist_set_accessor_test()
 	plist_object_free(obj);
 
 	obj = plist_object_new(PLIST_OBJECT_DATE);
-	plist_object_set_date(obj, (GTimeVal){ 1234567, 123456 });
-	g_assert_cmpint(obj->date.val.tv_sec, ==, 1234567);
-	g_assert_cmpint(obj->date.val.tv_usec, ==, 123456);
+	plist_object_set_date(obj, dt);
+	g_assert_cmpint(g_date_time_compare(dt, obj->date.val), ==, 0);
 	plist_object_free(obj);
 
 	obj = plist_object_new(PLIST_OBJECT_STRING);

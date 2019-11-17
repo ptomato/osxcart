@@ -80,7 +80,7 @@ plist_dump(PlistObject *object, PlistDumpContext *context)
         break;
 
     case PLIST_OBJECT_DATE:
-        tempstr = g_time_val_to_iso8601(&(object->date.val));
+        tempstr = g_date_time_format_iso8601(object->date.val);
         g_string_append_printf(context->buffer, "<date>%s</date>\n", tempstr);
         g_free(tempstr);
         break;
