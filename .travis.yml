@@ -13,5 +13,7 @@ compiler:
   - clang
   - gcc
 after_failure:
+  - find . -name test-suite.log
+  - find . -name test-suite.log | xargs cat
   - test -f testcases/test-suite.log && cat testcases/test-suite.log
   - test -f osxcart-1.1/_build/testcases/test-suite.log && cat osxcart-1.1/_build/testcases/test-suite.log
