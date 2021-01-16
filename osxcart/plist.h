@@ -5,15 +5,15 @@
 This file is part of Osxcart.
 
 Osxcart is free software: you can redistribute it and/or modify it under the
-terms of the GNU Lesser General Public License as published by the Free Software 
-Foundation, either version 3 of the License, or (at your option) any later 
+terms of the GNU Lesser General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
 version.
 
-Osxcart is distributed in the hope that it will be useful, but WITHOUT ANY 
+Osxcart is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
 
-You should have received a copy of the GNU Lesser General Public License along 
+You should have received a copy of the GNU Lesser General Public License along
 with Osxcart.  If not, see <http://www.gnu.org/licenses/>. */
 
 #include <glib.h>
@@ -36,14 +36,14 @@ G_BEGIN_DECLS
  * The type of value stored in a #PlistObject.
  */
 typedef enum {
-	PLIST_OBJECT_BOOLEAN,
-	PLIST_OBJECT_REAL,
-	PLIST_OBJECT_INTEGER,
-	PLIST_OBJECT_STRING,
-	PLIST_OBJECT_DATE,
-	PLIST_OBJECT_ARRAY,
-	PLIST_OBJECT_DICT,
-	PLIST_OBJECT_DATA
+    PLIST_OBJECT_BOOLEAN,
+    PLIST_OBJECT_REAL,
+    PLIST_OBJECT_INTEGER,
+    PLIST_OBJECT_STRING,
+    PLIST_OBJECT_DATE,
+    PLIST_OBJECT_ARRAY,
+    PLIST_OBJECT_DICT,
+    PLIST_OBJECT_DATA
 } PlistObjectType;
 
 /**
@@ -54,8 +54,8 @@ typedef enum {
  * A #PlistObject which contains a boolean, similar to <code>CFBoolean</code>.
  */
 typedef struct {
-	PlistObjectType type;
-	gboolean val;
+    PlistObjectType type;
+    gboolean val;
 } PlistObjectBoolean;
 
 /**
@@ -67,8 +67,8 @@ typedef struct {
  * <code>CFNumber</code> is used to represent these in CoreFoundation.
  */
 typedef struct {
-	PlistObjectType type;
-	gdouble val;
+    PlistObjectType type;
+    gdouble val;
 } PlistObjectReal;
 
 /**
@@ -80,8 +80,8 @@ typedef struct {
  * represent these in CoreFoundation.
  */
 typedef struct {
-	PlistObjectType type;
-	gint val;
+    PlistObjectType type;
+    gint val;
 } PlistObjectInteger;
 
 /**
@@ -92,8 +92,8 @@ typedef struct {
  * A #PlistObject which contains a string, similar to <code>CFString</code>.
  */
 typedef struct {
-	PlistObjectType type;
-	gchar *val;
+    PlistObjectType type;
+    gchar *val;
 } PlistObjectString;
 
 /**
@@ -101,12 +101,12 @@ typedef struct {
  * @type: Must be %PLIST_OBJECT_DATE
  * @val: The date
  *
- * A #PlistObject which contains a date in GLib's timeval format, similar to 
+ * A #PlistObject which contains a date in GLib's timeval format, similar to
  * <code>CFDate</code>.
  */
 typedef struct {
-	PlistObjectType type;
-	GTimeVal val;
+    PlistObjectType type;
+    GTimeVal val;
 } PlistObjectDate;
 
 /**
@@ -114,12 +114,12 @@ typedef struct {
  * @type: Must be %PLIST_OBJECT_ARRAY
  * @val: A list of #PlistObject<!---->s
  *
- * A #PlistObject which contains any number of child #PlistObject<!---->s, 
+ * A #PlistObject which contains any number of child #PlistObject<!---->s,
  * similar to <code>CFArray</code>.
  */
 typedef struct {
-	PlistObjectType type;
-	GList *val;
+    PlistObjectType type;
+    GList *val;
 } PlistObjectArray;
 
 /**
@@ -127,12 +127,12 @@ typedef struct {
  * @type: Must be %PLIST_OBJECT_DICT
  * @val: A hash table of #PlistObject<!---->s
  *
- * A #PlistObject which contains a dictionary of child #PlistObject<!---->s 
+ * A #PlistObject which contains a dictionary of child #PlistObject<!---->s
  * accessed by string keys, similar to <code>CFDictionary</code>.
  */
 typedef struct {
-	PlistObjectType type;
-	GHashTable *val;
+    PlistObjectType type;
+    GHashTable *val;
 } PlistObjectDict;
 
 /**
@@ -145,9 +145,9 @@ typedef struct {
  * <code>CFData</code>.
  */
 typedef struct {
-	PlistObjectType type;
-	guchar *val;
-	gsize length;
+    PlistObjectType type;
+    guchar *val;
+    gsize length;
 } PlistObjectData;
 
 /**
@@ -161,7 +161,7 @@ typedef struct {
  * @array: The object as a #PlistObjectArray.
  * @dict: The object as a #PlistObjectDict.
  * @data: The object as a #PlistObjectData.
- * 
+ *
  * The #PlistObject type is a union of all the types that can be stored in a
  * property list. It is similar to a <code>NSValue</code> or
  * <code>CFValue</code>, or an extremely lightweight <code>GValue</code>. In
@@ -179,15 +179,15 @@ typedef struct {
  *     g_list_foreach(obj->array.val, some_function, NULL);]|
  */
 typedef union {
-	PlistObjectType    type;
-	PlistObjectBoolean boolean;
-	PlistObjectReal    real;
-	PlistObjectInteger integer;
-	PlistObjectString  string;
-	PlistObjectDate    date;
-	PlistObjectArray   array;
-	PlistObjectDict    dict;
-	PlistObjectData    data;
+    PlistObjectType    type;
+    PlistObjectBoolean boolean;
+    PlistObjectReal    real;
+    PlistObjectInteger integer;
+    PlistObjectString  string;
+    PlistObjectDate    date;
+    PlistObjectArray   array;
+    PlistObjectDict    dict;
+    PlistObjectData    data;
 } PlistObject;
 
 /**
@@ -206,13 +206,13 @@ typedef union {
  * The different error codes which can be thrown in the #PLIST_ERROR domain.
  */
 typedef enum {
-	PLIST_ERROR_FAILED,
-	PLIST_ERROR_BAD_VERSION,
-	PLIST_ERROR_UNEXPECTED_OBJECT,
-	PLIST_ERROR_EXTRANEOUS_KEY,
-	PLIST_ERROR_MISSING_KEY,
-	PLIST_ERROR_BAD_DATE,
-	PLIST_ERROR_NO_ELEMENTS
+    PLIST_ERROR_FAILED,
+    PLIST_ERROR_BAD_VERSION,
+    PLIST_ERROR_UNEXPECTED_OBJECT,
+    PLIST_ERROR_EXTRANEOUS_KEY,
+    PLIST_ERROR_MISSING_KEY,
+    PLIST_ERROR_BAD_DATE,
+    PLIST_ERROR_NO_ELEMENTS
 } PlistError;
 
 /**
