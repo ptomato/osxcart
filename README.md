@@ -1,6 +1,8 @@
-[![Build Status](https://travis-ci.org/ptomato/osxcart.png?branch=master)](https://travis-ci.org/ptomato/osxcart)
-
 # The Osxcart Library #
+
+:warning: **As of 2022, this library is no longer supported.**
+For RTF integration with GtkTextBuffer, use [Ratify](https://github.com/ptomato/ratify#readme), this library's successor.
+For reading and writing property lists, use [libplist](https://github.com/libimobiledevice/libplist#readme).
 
 Osxcart, or **OS X C**onverting **A**nd **R**eading **T**ool, is a
 library designed to import file formats used in Mac OS X, NeXTSTEP, and
